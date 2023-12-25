@@ -1,19 +1,34 @@
-use std::{collections::HashMap, time::Duration};
+use serde_json::{self, Map, Value};
+use std::time::Duration;
+use ureq::{Agent, Error, Request, Response};
+use url::Url;
 
-use serde_json;
-use ureq::{Agent, Error, Header, Request, Response};
-use url::{ParseError, Url};
-
+#[derive(Copy, Clone)]
 pub enum Method {
     GET,
     POST,
 }
+
+impl Method {
+    pub fn from_str(method: &str) -> Method {
+        match method.to_lowercase().as_str() {
+            "get" => return Method::GET,
+            "post" => return Method::POST,
+            _ => {
+                println!("--> unknown method found setting it basck to get");
+                return Method::GET;
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct HttpRequest {
-    base: Url,
+    url: Url,
     client: Agent,
     method: Method,
-    header: HashMap<&'static str, &'static str>,
-    params: HashMap<&'static str, &'static str>,
+    headers: Option<Map<String, Value>>,
+    params: Option<Map<String, Value>>,
 }
 
 type HttpResponse = Response;
@@ -21,30 +36,41 @@ pub struct Config {
     read_timeout_in_s: u64,
     write_timeout_in_s: u64,
 }
+
 impl HttpRequest {
     pub fn new(
         method_enum: Method,
         addr: &str,
-        headers_str: &'static str,
-        params_str: &'static str,
+        headers_str: Option<String>,
+        params_str: Option<String>,
         req_conf: Option<Config>,
-    ) -> Option<HttpRequest> {
-        let url: Url = addr
-            .parse()
-            .map_err(|e: ParseError| {
-                let err_msg = format!("invalid url err: {}", e.to_string());
-                eprintln!("{}", err_msg);
-            })
-            .unwrap();
+    ) -> Result<HttpRequest, String> {
+        let url: Url = match addr.parse() {
+            Ok(u) => u,
+            Err(e) => return Err(e.to_string()),
+        };
 
-        let mut headers: HashMap<&str, &str> = HashMap::new();
-        if headers_str.len() > 0 {
-            headers = serde_json::from_str(headers_str).expect("invalid header format");
-        }
+        let mut headers: Option<Map<String, Value>> = None;
+        match headers_str {
+            Some(hs) => {
+                headers = match serde_json::from_str::<Value>(hs.as_str()) {
+                    Ok(Value::Object(map)) => Some(map),
+                    _ => None,
+                };
+            }
+            None => (),
+        };
 
-        let mut params: HashMap<&str, &str> = HashMap::new();
-        if params_str.len() > 0 {
-            params = serde_json::from_str(params_str).expect("invalid param format");
+        let mut params: Option<Map<String, Value>> = None;
+        match params_str {
+            Some(ps) => {
+                params = match serde_json::from_str::<Value>(ps.as_str()) {
+                    Ok(Value::Object(map)) => Some(map),
+                    _ => None,
+                };
+            }
+
+            None => (),
         }
 
         let mut timeout_read: Duration = Duration::from_secs(5);
@@ -62,31 +88,36 @@ impl HttpRequest {
             .https_only(true)
             .build();
 
-        Some(HttpRequest {
+        Ok(HttpRequest {
             client,
             method: method_enum,
-            base: url,
+            url,
             params,
-            header: headers,
+            headers,
         })
     }
 
-    pub fn execute(self) -> Result<HttpResponse, Error> {
+    pub fn execute(&self) -> Result<HttpResponse, Error> {
         let mut method: &str = match self.method {
             Method::GET => "GET",
             Method::POST => "POST",
         };
 
-        let mut request: Request = self.client.request(method, self.base.as_str());
-        for kv in self.params {
-            request = request.query(kv.0, kv.1);
+        let mut request: Request = self.client.request(method, self.url.as_str());
+
+        if let Some(p) = &self.params {
+            for (k, v) in p {
+                request = request.query(k.as_str(), v.as_str().unwrap());
+            }
         }
-        for kv in self.header {
-            request = request.set(kv.0, kv.1);
+
+        if let Some(h) = &self.headers {
+            for (k, v) in h {
+                request = request.set(k.as_str(), v.as_str().unwrap());
+            }
         }
 
         let response = request.call().expect("failed to send request");
-
         Ok(response)
     }
 }
