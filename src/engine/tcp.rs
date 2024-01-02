@@ -2,7 +2,6 @@ use http::request::Builder;
 use http::HeaderValue;
 use http::Method;
 use http::Request;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;

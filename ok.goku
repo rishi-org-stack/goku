@@ -1,0 +1,68 @@
+test_name: ok
+test_time: 2023-12-25 13:24:14.163186961 +05:30
+2023-12-25 13:24:14.163186961 +05:30	 https://jsonplaceholder.typicode.com/todos/1 -m get --params  --body  -l true --test-name ok -t 2 -c 3
+request
+response: 
+{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}
+time_taken: 737
+
+2023-12-25 13:24:14.163186961 +05:30	 https://jsonplaceholder.typicode.com/todos/1 -m get --params  --body  -l true --test-name ok -t 2 -c 3
+request
+response: 
+{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}
+time_taken: 198
+
+2023-12-25 13:24:14.163186961 +05:30	 https://jsonplaceholder.typicode.com/todos/1 -m get --params  --body  -l true --test-name ok -t 2 -c 3
+request
+response: 
+{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}
+time_taken: 935
+
+2023-12-25 13:24:14.163186961 +05:30	 https://jsonplaceholder.typicode.com/todos/1 -m get --params  --body  -l true --test-name ok -t 2 -c 3
+request
+response: 
+{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}
+time_taken: 177
+
+2023-12-25 13:24:14.163186961 +05:30	 https://jsonplaceholder.typicode.com/todos/1 -m get --params  --body  -l true --test-name ok -t 2 -c 3
+request
+response: 
+{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}
+time_taken: 3208
+
+2023-12-25 13:24:14.163186961 +05:30	 https://jsonplaceholder.typicode.com/todos/1 -m get --params  --body  -l true --test-name ok -t 2 -c 3
+request
+response: 
+{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}
+time_taken: 223
+

@@ -1,8 +1,12 @@
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+
 use crate::cli::ExecutionCommand;
 use crate::engine::http::{HttpRequest, Method};
+use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub struct Attack {
     http_request: HttpRequest,
@@ -19,6 +23,7 @@ pub struct AttackResult {
     response: String,
     time_taken: Duration,
 }
+
 impl AttackResult {
     pub fn print(&self) {
         println!("response: {}", self.response);
@@ -72,60 +77,101 @@ impl Attack {
         });
     }
 
-    pub fn run(self) {
+    // pub fn run(http_req: HttpRequest) {
+    //     thread::spawn(move || {
+    //         http_req.execute();
+    //     });
+    // }
+
+    pub fn run_c(&self) -> Result<ExecutionSet, &'static str> {
+        let mut call_list: CallMap = HashMap::new();
+        let (tx, rx) = mpsc::channel::<(u128, Execution)>();
+
         for _ in 0..self.run_count {
-            match self.http_request.execute() {
-                Ok(res) => {
-                    let res_str = res.into_string().expect("failed to translare into string");
-                    println!("res: {}", res_str);
-                }
-                Err(e) => {
-                    println!("ok failed: {}", e.to_string().as_str());
-                }
-            };
-        }
-    }
+            let mut threads = vec![];
+            for _ in 0..self.concurrent_calls {
+                let http_req = self.http_request.clone();
+                let cloned_tx = tx.clone();
 
-    pub fn run_c(&self) -> Result<Receiver<AttackResult>, String> {
-        let (tx, rx) = mpsc::channel();
-        let tx_ref = &tx;
-        for _ in 0..self.concurrent_calls {
-            let req = self.http_request.clone();
-            let run_count = self.run_count;
-            let cloned_tx = tx_ref.clone();
-            thread::spawn(move || {
-                for _ in 0..run_count {
-                    let start = Instant::now();
-                    let req_execution = req.execute();
-                    let end = Instant::now().duration_since(start);
+                let t = thread::spawn(move || {
+                    let start: SystemTime = SystemTime::now();
+                    let exec_result = http_req.execute();
+                    let time_taken: u128 =
+                        SystemTime::now().duration_since(start).unwrap().as_millis();
 
-                    match req_execution {
+                    match exec_result {
                         Ok(res) => {
-                            match res.into_string() {
-                                Ok(rsp) => {
-                                    cloned_tx
-                                        .send(AttackResult {
-                                            response: rsp,
-                                            time_taken: end,
-                                        })
-                                        .unwrap();
-                                }
-
-                                Err(e) => {
-                                    //TODO: handle error here
-                                    println!("cant convert response into string {}", e.to_string());
-                                    return;
-                                }
-                            };
+                            // let resp_body = &res.into_string().unwrap_or("none".to_string());
+                            cloned_tx
+                                .send((
+                                    start.duration_since(UNIX_EPOCH).unwrap().as_secs() as u128,
+                                    Execution {
+                                        time_taken,
+                                        status: res.status(),
+                                        result: "result",
+                                    },
+                                ))
+                                .unwrap();
                         }
                         Err(e) => {
-                            //TODO: handle error here
-                            println!("ok failed: {}", e.to_string().as_str());
+                            println!("err :{}", e.to_string().as_str());
                         }
                     };
-                }
-            });
+                });
+
+                threads.push(t);
+            }
+
+            for child_t in threads {
+                child_t.join().unwrap();
+            }
+
+            for exec in rx.recv() {
+                call_list.insert(exec.0, exec.1);
+            }
         }
-        Ok(rx)
+        Ok(ExecutionSet::new("req", call_list))
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Execution<'a> {
+    time_taken: u128,
+    status: u16,
+    result: &'a str,
+}
+type CallMap<'a> = HashMap<u128, Execution<'a>>;
+#[derive(Serialize, Deserialize)]
+pub struct ExecutionSet<'a> {
+    request: &'a str,
+    call_list: CallMap<'a>,
+}
+
+impl<'a> ExecutionSet<'a> {
+    pub fn new(request: &'a str, call_list: CallMap<'a>) -> ExecutionSet<'a> {
+        ExecutionSet { request, call_list }
+    }
+}
+
+pub fn ok_print() {
+    let mut mp: HashMap<u128, Execution> = HashMap::new();
+    mp.insert(
+        1,
+        Execution {
+            status: 200,
+            time_taken: 65,
+            result: "a",
+        },
+    );
+    mp.insert(
+        2,
+        Execution {
+            status: 404,
+            time_taken: 66,
+            result: "b",
+        },
+    );
+    let s = ExecutionSet::new("req 1", mp);
+    let serlialized = serde_json::to_string_pretty(&s).unwrap();
+    println!("data: {}", serlialized)
 }

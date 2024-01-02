@@ -98,7 +98,7 @@ impl HttpRequest {
     }
 
     pub fn execute(&self) -> Result<HttpResponse, Error> {
-        let mut method: &str = match self.method {
+        let method: &str = match self.method {
             Method::GET => "GET",
             Method::POST => "POST",
         };
