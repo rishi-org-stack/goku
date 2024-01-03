@@ -22,10 +22,6 @@ pub struct ExecutionCommand {
     pub body: Option<String>,
 
     /// file to log responses for api call
-    #[arg(long, short, required = false)]
-    pub log_file: Option<bool>,
-
-    /// file to log responses for api call
     #[arg(long, required = false)]
     pub test_name: Option<String>,
 
