@@ -10,7 +10,7 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     fs,
-    io::{self, Write},
+    io::{self, Read, Write},
     sync::mpsc::Receiver,
 };
 
@@ -72,7 +72,20 @@ fn main() {
         }
 
         "report" => {
-            println!("reporting command")
+            let mut test_name = match args[2].to_str() {
+                Some(tn) => tn.to_string(),
+                None => {
+                    println!("test name is required");
+                    return;
+                }
+            };
+            test_name.push_str(".logs.json");
+            let mut file = fs::File::open(test_name).unwrap();
+            let mut content = String::new();
+            file.read_to_string(&mut content).unwrap();
+
+            let es = ExecutionSet::from_string(&content);
+            println!("es: {:?}", es)
         }
 
         _ => run_help(),

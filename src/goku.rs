@@ -1,4 +1,3 @@
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::cli::ExecutionCommand;
@@ -162,5 +161,10 @@ impl<'a> ExecutionSet<'a> {
     }
     pub fn to_string(&self) -> String {
         serde_json::to_string_pretty(&self).unwrap()
+    }
+
+    pub fn from_string(s: &'a str) -> ExecutionSet<'a> {
+        let mut es: ExecutionSet = serde_json::from_str(s).unwrap();
+        es
     }
 }
