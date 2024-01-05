@@ -3,10 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::cli::ExecutionCommand;
 use crate::engine::http::{HttpRequest, Method};
 use std::collections::HashMap;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
+use std::time::{Duration, SystemTime};
 pub struct Attack {
     http_request: HttpRequest,
     run_count: u32,
@@ -83,7 +82,7 @@ impl Attack {
     // }
 
     pub fn run_c(&self) -> Result<ExecutionSet, &'static str> {
-        let mut call_list: CallMap = HashMap::new();
+        let mut call_list: CallMap = Vec::new();
         let (tx, rx) = mpsc::channel::<(u128, Execution)>();
         let mut x: u128 = 0;
         for _ in 0..self.run_count {
@@ -125,7 +124,6 @@ impl Attack {
             for child_t in threads {
                 child_t.join().unwrap();
             }
-
             for _ in 0..self.concurrent_calls {
                 let exec = match rx.recv() {
                     Ok(rs) => rs,
@@ -135,10 +133,14 @@ impl Attack {
                     }
                 };
 
-                call_list.insert(exec.0, exec.1);
+                call_list.push(exec.1);
             }
         }
-        Ok(ExecutionSet::new("req", call_list))
+        Ok(ExecutionSet::new(
+            "req",
+            call_list,
+            (self.run_count * self.concurrent_calls as u32) as u32,
+        ))
     }
 }
 
@@ -148,23 +150,86 @@ pub struct Execution<'a> {
     status: u16,
     result: &'a str,
 }
-type CallMap<'a> = HashMap<u128, Execution<'a>>;
+type CallMap<'a> = Vec<Execution<'a>>;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ExecutionSet<'a> {
+    total_calls: u32,
     request: &'a str,
     call_list: CallMap<'a>,
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CodeDistribution {
+    count: u32,
+    percentage: u8,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Metrics {
+    avg_latency: u128,
+    max_latency: u128,
+    min_latency: u128,
+    code_distribution: HashMap<u16, CodeDistribution>,
+    total_calls: u32,
+    // concurrent_calls: u32,
+}
 
+impl Metrics {
+    pub fn to_string(&self) -> String {
+        serde_json::to_string_pretty(&self).unwrap()
+    }
+}
 impl<'a> ExecutionSet<'a> {
-    pub fn new(request: &'a str, call_list: CallMap<'a>) -> ExecutionSet<'a> {
-        ExecutionSet { request, call_list }
+    pub fn new(request: &'a str, call_list: CallMap<'a>, total_calls: u32) -> ExecutionSet<'a> {
+        ExecutionSet {
+            request,
+            call_list,
+            total_calls,
+        }
     }
     pub fn to_string(&self) -> String {
         serde_json::to_string_pretty(&self).unwrap()
     }
 
     pub fn from_string(s: &'a str) -> ExecutionSet<'a> {
-        let mut es: ExecutionSet = serde_json::from_str(s).unwrap();
+        let es: ExecutionSet = serde_json::from_str(s).unwrap();
         es
+    }
+
+    pub fn get_report(&self) -> Metrics {
+        let call_list_count = self.call_list.len();
+        self.call_list.iter().fold(
+            Metrics {
+                avg_latency: 0,
+                max_latency: u128::MIN,
+                min_latency: u128::MAX,
+                code_distribution: HashMap::new(),
+                total_calls: self.total_calls,
+            },
+            |acc, x| {
+                let avg_latency = acc.avg_latency + (x.time_taken / call_list_count as u128);
+                let max_latency = u128::max(acc.max_latency, x.time_taken);
+                let min_latency = u128::min(acc.min_latency, x.time_taken);
+
+                let mut code_distribution = acc.code_distribution;
+                code_distribution
+                    .entry(x.status)
+                    .and_modify(|c| {
+                        c.count += 1;
+                        c.percentage += (100 / self.total_calls) as u8
+                    })
+                    .or_insert(CodeDistribution {
+                        count: 1,
+                        percentage: (100 / self.total_calls) as u8,
+                    });
+
+                Metrics {
+                    avg_latency,
+                    max_latency,
+                    min_latency,
+                    code_distribution: code_distribution,
+                    total_calls: acc.total_calls,
+                    // concurrent_calls:
+                }
+            },
+        )
     }
 }

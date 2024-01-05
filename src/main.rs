@@ -85,7 +85,20 @@ fn main() {
             file.read_to_string(&mut content).unwrap();
 
             let es = ExecutionSet::from_string(&content);
-            println!("es: {:?}", es)
+            let report = es.get_report();
+
+            let mut report_path = match args[2].to_str() {
+                Some(tn) => tn.to_string(),
+                None => {
+                    println!("test name is required");
+                    return;
+                }
+            };
+
+            report_path.push_str(".report.json");
+            let mut report_file = fs::File::create(report_path).unwrap();
+            let mut report_content = report.to_string();
+            report_file.write(report_content.as_bytes()).unwrap();
         }
 
         _ => run_help(),
